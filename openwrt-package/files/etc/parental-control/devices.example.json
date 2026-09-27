@@ -1,0 +1,28 @@
+{
+  "devices": [
+    {
+      "id": "example-device",
+      "name": "Example device",
+      "hostnames": ["example-device", "android-device"],
+      "mac": "02:00:00:00:00:01",
+      "enabled": true,
+      "daily_limit_minutes": 120,
+      "session_limit_minutes": 60,
+      "break_minutes": 60,
+      "daily_limit_enabled": false,
+      "session_limit_enabled": true,
+      "break_enabled": true,
+      "idle_timeout_seconds": 300,
+      "activity_threshold_bytes": 4096,
+      "night_enabled": false,
+      "speed_limit_enabled": false,
+      "speed_limit_mbps": 5,
+      "whitelist_enabled": true,
+      "whitelist_start": "08:00",
+      "whitelist_end": "16:00",
+      "whitelist_entries": ["school.example.org", "203.0.113.10"],
+      "night_start": "22:00",
+      "night_end": "08:00"
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+name: Build OpenWrt 25.12.5 APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      pkg_version:
+        description: 'Версия, например 1.0.0'
+        required: true
+        default: '0.1.0'
+        type: string
+      pkg_release:
+        description: 'Релиз пакета, например 1'
+        required: true
+        default: '1'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openwrt-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-openwrt:
+    runs-on: ubuntu-24.04
+    env:
+      PKG_VERSION: ${{ inputs.pkg_version || '0.1.0' }}
+      PKG_RELEASE: ${{ inputs.pkg_release || '1' }}
+      SDK_FILE: openwrt-sdk-25.12.5-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+      SDK_URL: https://downloads.openwrt.org/releases/25.12.5/targets/x86/64/openwrt-sdk-25.12.5-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+      SDK_SHA256: 0c8df0151a1e88feb7c03d694d61f6a18d51872815b7c811d76e2b77504d5e9c
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply package version
+        run: |
+          case "$PKG_VERSION" in
+            ''|*[!0-9A-Za-z._+-]*)
+              echo "::error::Invalid package version: $PKG_VERSION"
+              exit 1
+              ;;
+          esac
+          case "$PKG_RELEASE" in
+            ''|*[!0-9]*)
+              echo "::error::Invalid package release: $PKG_RELEASE"
+              exit 1
+              ;;
+          esac
+
+          sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$PKG_VERSION/" openwrt-package/Makefile
+          sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=$PKG_RELEASE/" openwrt-package/Makefile
+
+          grep '^PKG_VERSION:=' openwrt-package/Makefile
+          grep '^PKG_RELEASE:=' openwrt-package/Makefile
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl zstd rsync file gawk gettext libncurses-dev python3 libjson-c-dev nodejs openssl
+
+      - name: Native lint and compile checks
+        run: |
+          cmp src/parental-control.c openwrt-package/src/parental-control.c
+          cmp src/parental-control-web.c openwrt-package/src/parental-control-web.c
+          diff -qr files openwrt-package/files
+          test "$(sed -n 's/^PKG_VERSION:=//p' openwrt-package/Makefile)" = "$PKG_VERSION"
+          test "$(sed -n 's/^PKG_RELEASE:=//p' openwrt-package/Makefile)" = "$PKG_RELEASE"
+          node --check files/usr/share/parental-control/www/app.js
+          python3 -m json.tool files/etc/parental-control/settings.json >/dev/null
+          python3 -m json.tool files/etc/parental-control/devices.default.json >/dev/null
+          python3 -m json.tool files/etc/parental-control/devices.example.json >/dev/null
+          python3 -m json.tool files/usr/share/parental-control/www/manifest.json >/dev/null
+          sh -n files/etc/init.d/parental-control
+          sh -n files/etc/init.d/parental-control-web
+          sh -n test-openwrt/check-api.sh
+          sh -n test-openwrt/prepare-test.sh
+          sh -n test-openwrt/run-test.sh
+          sh -n test-openwrt/stop-and-restore.sh
+          make clean
+          make CFLAGS="-O2 -Wall -Wextra -Werror"
+
+      - name: Download and verify OpenWrt SDK
+        run: |
+          curl -fL --retry 3 -o "$SDK_FILE" "$SDK_URL"
+          echo "$SDK_SHA256  $SDK_FILE" | sha256sum -c -
+          mkdir sdk
+          tar --zstd -xf "$SDK_FILE" -C sdk --strip-components=1
+
+
+      - name: Prepare APK signing key
+        working-directory: sdk
+        env:
+          APK_PRIVATE_KEY: ${{ secrets.APK_PRIVATE_KEY }}
+          APK_PRIVATE_KEY_B64: ${{ secrets.APK_PRIVATE_KEY_B64 }}
+        run: |
+          umask 077
+
+          # Pull requests use a throw-away key so CI exercises the real signed
+          # package path without exposing repository secrets.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            openssl ecparam -name prime256v1 -genkey -noout -out private-key.pem
+            openssl pkey -in private-key.pem -pubout -out public-key.pem
+            chmod 600 private-key.pem
+            chmod 644 public-key.pem
+            touch .parental-control-signing-enabled .parental-control-signing-test-key
+            echo "Ephemeral APK signing key prepared for CI."
+            exit 0
+          fi
+
+          if [ -z "$APK_PRIVATE_KEY" ] && [ -z "$APK_PRIVATE_KEY_B64" ]; then
+            echo "::notice::No APK signing key is configured; building an unsigned APK."
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          raw = (os.environ.get("APK_PRIVATE_KEY_B64") or os.environ.get("APK_PRIVATE_KEY") or "").strip()
+
+          if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
+              raw = raw[1:-1].strip()
+
+          raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+          if "-----BEGIN" in raw and "\\n" in raw:
+              raw = raw.replace("\\n", "\n")
+
+          if "-----BEGIN" not in raw:
+              compact = "".join(raw.split())
+              try:
+                  raw = base64.b64decode(compact, validate=True).decode("utf-8")
+              except Exception as exc:
+                  raise SystemExit(
+                      "Signing secret is not valid PEM or base64-encoded PEM. "
+                      "Paste only the key value, without shell prompt/command text. "
+                      f"Decoder error: {exc}"
+                  )
+
+          if "-----BEGIN" not in raw or "PRIVATE KEY-----" not in raw:
+              raise SystemExit("Signing secret decoded, but it is not a PEM private key.")
+
+          Path("private-key.pem").write_text(raw.strip() + "\n", encoding="utf-8", newline="\n")
+          PY
+
+          chmod 600 private-key.pem
+          openssl pkey -in private-key.pem -check -noout
+          openssl pkey -in private-key.pem -pubout -out public-key.pem
+          chmod 644 public-key.pem
+          touch .parental-control-signing-enabled
+          echo "APK signing key prepared."
+
+      - name: Enable per-package signing for OpenWrt 25.12.5
+        working-directory: sdk
+        run: |
+          if [ ! -f .parental-control-signing-enabled ]; then
+            echo "Per-package signing disabled for this build."
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("include/package-pack.mk")
+          lines = path.read_text(encoding="utf-8").splitlines()
+
+          matches = [i for i, line in enumerate(lines) if '--files "$$(IDIR_$(1))"' in line]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one apk mkpkg --files line, found {len(matches)}")
+
+          i = matches[0]
+          if i + 1 < len(lines) and "--sign-key $(BUILD_KEY_APK_SEC)" in lines[i + 1]:
+              pass
+          else:
+              indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+              lines.insert(i + 1, indent + "--sign-key $(BUILD_KEY_APK_SEC) \\")
+
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+          grep -F -- '--sign-key $(BUILD_KEY_APK_SEC)' include/package-pack.mk
+
+      - name: Prepare libjson-c feed only
+        working-directory: sdk
+        run: |
+          ./scripts/feeds update base
+          ./scripts/feeds install -p base libjson-c
+
+      - name: Verify package sources are synchronized
+        run: |
+          cmp src/parental-control.c openwrt-package/src/parental-control.c
+          cmp src/parental-control-web.c openwrt-package/src/parental-control-web.c
+          diff -qr files openwrt-package/files
+
+      - name: Add parental-control package
+        run: |
+          rm -rf sdk/package/parental-control
+          cp -a openwrt-package sdk/package/parental-control
+
+      - name: Configure SDK
+        working-directory: sdk
+        run: |
+          {
+            echo 'CONFIG_PACKAGE_parental-control=m'
+            echo 'CONFIG_USE_APK=y'
+          } > .config
+          make defconfig
+
+          grep -E '^(CONFIG_PACKAGE_parental-control|CONFIG_USE_APK=)' .config
+          grep -qx 'CONFIG_USE_APK=y' .config
+
+      - name: Build APK
+        working-directory: sdk
+        run: |
+          make package/feeds/base/libjson-c/compile V=s -j"$(nproc)"
+          make package/parental-control/compile V=s -j"$(nproc)"
+
+      - name: Collect and inspect APK
+        run: |
+          mkdir -p artifacts
+          find sdk/bin -type f -name 'parental-control*.apk' -print -exec cp -v {} artifacts/ \;
+          test -n "$(find artifacts -type f -name 'parental-control*.apk' -print -quit)"
+
+          if [ -f sdk/.parental-control-signing-enabled ]; then
+            test -s sdk/public-key.pem
+            cp sdk/public-key.pem artifacts/parental-control-signing-public-key.pem
+
+            mkdir -p .apk-verify-keys
+            cp sdk/public-key.pem .apk-verify-keys/parental-control.pem
+            for package in artifacts/parental-control*.apk; do
+              sdk/staging_dir/host/bin/apk \
+                --keys-dir "$PWD/.apk-verify-keys" \
+                verify "$PWD/$package"
+            done
+
+            {
+              echo 'signed=true'
+              if [ -f sdk/.parental-control-signing-test-key ]; then
+                echo 'key=ephemeral-ci'
+              else
+                echo 'key=repository-secret'
+              fi
+              printf 'public_key_sha256='
+              openssl pkey -pubin -in sdk/public-key.pem -outform DER | sha256sum | awk '{print $1}'
+            } > artifacts/SIGNING.txt
+          else
+            echo 'signed=false' > artifacts/SIGNING.txt
+          fi
+
+          ls -lh artifacts
+          sha256sum artifacts/*.apk | tee artifacts/SHA256SUMS
+
+      - name: Publish APK directly (no ZIP)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="$(find artifacts -maxdepth 1 -type f -name 'parental-control*.apk' -print -quit)"
+          test -n "$APK"
+          test -n "$PKG_VERSION"
+          test -n "$PKG_RELEASE"
+          FULL_VERSION="${PKG_VERSION}-r${PKG_RELEASE}"
+          OUT="artifacts/parental-control-${FULL_VERSION}.apk"
+          if [ "$APK" != "$OUT" ]; then
+            cp "$APK" "$OUT"
+          fi
+          TAG="parental-control-${FULL_VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$OUT" --clobber
+          else
+            gh release create "$TAG" "$OUT" --title "parental-control ${FULL_VERSION}" --notes "Automatic OpenWrt APK build."
+          fi
