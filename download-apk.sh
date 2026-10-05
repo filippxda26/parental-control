@@ -55,7 +55,7 @@ mv "$TMP_FILE" "$OUT_FILE"
 trap - EXIT HUP INT TERM
 
 printf 'Установка %s...\n' "$OUT_FILE"
-if apk add "$OUT_FILE"; then
+if apk add --allow-untrusted "$OUT_FILE"; then
     printf 'Готово: %s скачан и установлен.\n' "$APK_NAME"
 else
     printf 'Ошибка установки. APK сохранён: %s\n' "$OUT_FILE" >&2
