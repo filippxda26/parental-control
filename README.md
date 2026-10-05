@@ -70,10 +70,10 @@ GitHub Actions собирает пакет для **OpenWrt 25.12.5 x86_64** т�
 
 ### Автоматическая загрузка и установка последнего APK
 
-На OpenWrt можно одной командой скачать APK из последнего GitHub Release, проверить его опубликованным ключом подписи и сразу установить:
+На OpenWrt можно одной командой скачать APK из последнего GitHub Release и сразу установить его с `--allow-untrusted`:
 
 ~~~sh
-wget -qO- https://raw.githubusercontent.com/filippxda26/parental-control/main/download-apk.sh | sh
+wget -qO- "https://raw.githubusercontent.com/filippxda26/parental-control/main/download-apk.sh?$(date +%s)" | sh
 ~~~
 
 Если репозиторий уже скачан:
@@ -88,7 +88,7 @@ sh ./download-apk.sh
 sh ./download-apk.sh /tmp
 ~~~
 
-Скрипт автоматически находит последний Release, скачивает `parental-control-*.apk` и `parental-control-signing-public-key.pem`, проверяет подпись APK через временный набор доверенных ключей и только после успешной проверки устанавливает пакет. Системный список доверенных ключей при этом не изменяется. Команду нужно запускать с правами, достаточными для установки пакетов.
+Скрипт автоматически находит последний Release, скачивает `parental-control-*.apk` и устанавливает его командой `apk --allow-untrusted add`. Параметр с текущим временем в URL нужен только для обхода возможного кэша `raw.githubusercontent.com`. Команду нужно запускать с правами, достаточными для установки пакетов.
 
 1. Откройте раздел [Releases](https://github.com/filippxda26/parental-control/releases).
 2. Скачайте `parental-control-<version>.apk`.
@@ -112,7 +112,7 @@ apk add ./parental-control-<version>.apk
 http://IP_РОУТЕРА:5000/
 ~~~
 
-Для подписанного Release используйте `download-apk.sh`: он автоматически подставляет опубликованный ключ подписи. При ручной установке ключ должен быть добавлен в доверенный набор `apk` либо передан через `--keys-dir`.
+При ручной установке этого самосборного пакета используйте `apk --allow-untrusted add ./parental-control-<version>.apk`.
 
 ## Управление сервисом
 
