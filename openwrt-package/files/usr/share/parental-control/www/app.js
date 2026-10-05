@@ -648,7 +648,6 @@ dialog.addEventListener('click',event=>{
 
 form.addEventListener('submit',async event=>{
   event.preventDefault();
-  const restartAfterSave=event.submitter?.value==='save-restart';
   normalizeTime(form.elements.night_start);
   normalizeTime(form.elements.night_end);
   normalizeTime(form.elements.whitelist_start);
@@ -718,14 +717,9 @@ form.addEventListener('submit',async event=>{
       method:editing?'PUT':'POST',
       body
     });
-    if(restartAfterSave){
-      $('#service').textContent='Перезапуск службы…';
-      await api('/service/restart',{method:'POST'});
-      closeEditor();
-      return;
-    }
+    $('#service').textContent='Перезапуск службы…';
+    await api('/service/restart',{method:'POST'});
     closeEditor();
-    await refresh();
   }catch(error){
     alert(error.message);
   }
