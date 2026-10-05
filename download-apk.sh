@@ -14,6 +14,11 @@ else
     exit 1
 fi
 
+if ! command -v apk >/dev/null 2>&1; then
+    printf '%s\n' "Ошибка: команда apk не найдена. Этот скрипт предназначен для OpenWrt с apk." >&2
+    exit 1
+fi
+
 if [ "$FETCH_CMD" = "wget" ]; then
     RELEASE_JSON="$(wget -qO- "$API_URL")" || {
         printf '%s\n' "Ошибка: не удалось получить информацию о последнем Release." >&2
@@ -48,4 +53,11 @@ fi
 
 mv "$TMP_FILE" "$OUT_FILE"
 trap - EXIT HUP INT TERM
-printf 'Готово: %s\n' "$OUT_FILE"
+
+printf 'Установка %s...\n' "$OUT_FILE"
+if apk add "$OUT_FILE"; then
+    printf 'Готово: %s скачан и установлен.\n' "$APK_NAME"
+else
+    printf 'Ошибка установки. APK сохранён: %s\n' "$OUT_FILE" >&2
+    exit 1
+fi
