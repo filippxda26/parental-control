@@ -70,7 +70,7 @@ GitHub Actions собирает пакет для **OpenWrt 25.12.5 x86_64** т�
 
 ### Автоматическая загрузка и установка последнего APK
 
-На OpenWrt можно одной командой скачать APK из последнего GitHub Release и сразу установить его через `apk add --allow-untrusted`:
+На OpenWrt можно одной командой скачать APK из последнего GitHub Release и сразу установить его через `apk --allow-untrusted add`:
 
 ~~~sh
 wget -qO- https://raw.githubusercontent.com/filippxda26/parental-control/main/download-apk.sh | sh
@@ -88,7 +88,7 @@ sh ./download-apk.sh
 sh ./download-apk.sh /tmp
 ~~~
 
-Скрипт автоматически находит последний Release, выбирает файл `parental-control-*.apk`, скачивает его через доступный `wget` или `curl`, а затем выполняет `apk add --allow-untrusted` для скачанного файла. Команду нужно запускать с правами, достаточными для установки пакетов.
+Скрипт автоматически находит последний Release, выбирает файл `parental-control-*.apk`, скачивает его через доступный `wget` или `curl`, а затем выполняет `apk --allow-untrusted add` для скачанного файла. Команду нужно запускать с правами, достаточными для установки пакетов.
 
 1. Откройте раздел [Releases](https://github.com/filippxda26/parental-control/releases).
 2. Скачайте `parental-control-<version>.apk`.
@@ -96,7 +96,7 @@ sh ./download-apk.sh /tmp
 4. Установите пакет:
 
 ~~~sh
-apk add --allow-untrusted ./parental-control-<version>.apk
+apk --allow-untrusted add ./parental-control-<version>.apk
 ~~~
 
 5. Включите автозапуск и запустите сервис:
