@@ -21,6 +21,8 @@
       "whitelist_start": "08:00",
       "whitelist_end": "16:00",
       "whitelist_entries": ["school.example.org", "203.0.113.10"],
+      "blacklist_enabled": true,
+      "blacklist_entries": ["youtube.com", "198.51.100.25"],
       "night_start": "22:00",
       "night_end": "08:00"
     }
