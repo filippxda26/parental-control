@@ -11,7 +11,7 @@ define Package/parental-control
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=Recovered parental control service and web UI
-  DEPENDS:=+libjson-c
+  DEPENDS:=+libjson-c +conntrack
 endef
 
 define Package/parental-control/description
