@@ -267,8 +267,19 @@ jobs:
             cp "$APK" "$OUT"
           fi
           TAG="parental-control-${FULL_VERSION}"
+          ASSETS=("$OUT")
+          if [ -f artifacts/parental-control-signing-public-key.pem ]; then
+            ASSETS+=(artifacts/parental-control-signing-public-key.pem)
+          fi
+          if [ -f artifacts/SIGNING.txt ]; then
+            ASSETS+=(artifacts/SIGNING.txt)
+          fi
+          if [ -f artifacts/SHA256SUMS ]; then
+            ASSETS+=(artifacts/SHA256SUMS)
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$OUT" --clobber
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
-            gh release create "$TAG" "$OUT" --title "parental-control ${FULL_VERSION}" --notes "Automatic OpenWrt APK build."
+            gh release create "$TAG" "${ASSETS[@]}" --title "parental-control ${FULL_VERSION}" --notes "Automatic OpenWrt APK build."
           fi
