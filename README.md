@@ -68,9 +68,9 @@ http://192.168.1.1:8081/connect/имя-профиля
 
 GitHub Actions собирает пакет для **OpenWrt 25.12.5 x86_64** только при ручном запуске через **Run workflow**. Автоматический запуск при `push` и `pull_request` отключён. После успешной ручной сборки APK публикуется в GitHub Releases.
 
-### Автоматическое скачивание последнего APK
+### Автоматическая загрузка и установка последнего APK
 
-На OpenWrt или Linux можно одной командой скачать APK из последнего GitHub Release в текущую папку:
+На OpenWrt можно одной командой скачать APK из последнего GitHub Release и сразу установить его через `apk add`:
 
 ~~~sh
 wget -qO- https://raw.githubusercontent.com/filippxda26/parental-control/main/download-apk.sh | sh
@@ -82,13 +82,13 @@ wget -qO- https://raw.githubusercontent.com/filippxda26/parental-control/main/do
 sh ./download-apk.sh
 ~~~
 
-Чтобы сохранить APK в другую директорию, передайте её первым аргументом:
+Чтобы сохранить APK в другую директорию перед установкой, передайте её первым аргументом:
 
 ~~~sh
 sh ./download-apk.sh /tmp
 ~~~
 
-Скрипт автоматически находит последний Release, выбирает файл `parental-control-*.apk` и использует доступный `wget` или `curl`. Он только скачивает пакет и не устанавливает его автоматически.
+Скрипт автоматически находит последний Release, выбирает файл `parental-control-*.apk`, скачивает его через доступный `wget` или `curl`, а затем выполняет `apk add` для скачанного файла. Команду нужно запускать с правами, достаточными для установки пакетов.
 
 1. Откройте раздел [Releases](https://github.com/filippxda26/parental-control/releases).
 2. Скачайте `parental-control-<version>.apk`.
