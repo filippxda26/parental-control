@@ -37,6 +37,7 @@ function connectSocket(){
       clearTimeout(timeout);
       clearTimeout(reconnectTimer);
       socketPromise=null;
+      restartExpectedUntil=0;
       $('#service').textContent='Служба работает';
     };
     ws.onmessage=event=>{
