@@ -156,6 +156,8 @@ function deviceUiSignature(device){
     whitelist_start:device.whitelist_start||'',
     whitelist_end:device.whitelist_end||'',
     whitelist_entries:device.whitelist_entries||[],
+    blacklist_enabled:!!device.blacklist_enabled,
+    blacklist_entries:device.blacklist_entries||[],
     traffic_idle:!!device.traffic_idle,
     night_start:device.night_start||'',
     night_end:device.night_end||''
@@ -268,6 +270,10 @@ function card(device){
     const entries=(device.whitelist_entries||[]).length;
     const status=device.whitelist_enforced?'активен':device.whitelist_active?'отключён полной блокировкой':'неактивен';
     dl.after(usageLine('whitelist-status',`Whitelist: ${status}, ${entries} адресов · ${device.whitelist_start||''}–${device.whitelist_end||''}`));
+  }
+  if(device.blacklist_enabled){
+    const entries=(device.blacklist_entries||[]).length;
+    dl.after(usageLine('blacklist-status',`Blacklist: включён, ${entries} адресов`));
   }
   const reasons=reasonLabels(device);
   if(reasons.length){
@@ -588,10 +594,11 @@ function openEditor(device=null){
     for(const key of ['name','daily_limit_minutes','session_limit_minutes','break_minutes','speed_limit_mbps','night_start','night_end','whitelist_start','whitelist_end']){
       if(form.elements[key]&&device[key]!==undefined)form.elements[key].value=device[key];
     }
-    for(const key of ['daily_limit_enabled','session_limit_enabled','break_enabled','night_enabled','speed_limit_enabled','whitelist_enabled']){
+    for(const key of ['daily_limit_enabled','session_limit_enabled','break_enabled','night_enabled','speed_limit_enabled','whitelist_enabled','blacklist_enabled']){
       form.elements[key].checked=!!device[key];
     }
     form.elements.whitelist_entries.value=(device.whitelist_entries||[]).join('\n');
+    form.elements.blacklist_entries.value=(device.blacklist_entries||[]).join('\n');
     hostnameEnabled.checked=false;
   }else{
     form.elements.daily_limit_enabled.checked=false;
@@ -604,6 +611,8 @@ function openEditor(device=null){
     form.elements.whitelist_start.value='08:00';
     form.elements.whitelist_end.value='22:00';
     form.elements.whitelist_entries.value='';
+    form.elements.blacklist_enabled.checked=false;
+    form.elements.blacklist_entries.value='';
     hostnameEnabled.checked=true;
     hostRow();
   }
@@ -670,6 +679,12 @@ form.addEventListener('submit',async event=>{
     return;
   }
 
+  const blacklistEntries=[...new Set(form.elements.blacklist_entries.value.split(/[\n,]+/).map(value=>value.trim().toLowerCase()).filter(Boolean))];
+  if(form.elements.blacklist_enabled.checked&&!blacklistEntries.length){
+    alert('Добавьте хотя бы один домен или IP в Blacklist');
+    return;
+  }
+
   const connectedMacs=editing?[...new Set([...linkedBox.querySelectorAll('.linked-device-row')].map(row=>row.dataset.mac.trim().toLowerCase()).filter(Boolean))]:[];
   const primaryMac=editing?(connectedMacs[0]||''):form.elements.mac.value.trim().toLowerCase();
   const linkedMacs=editing?connectedMacs.slice(1):[];
@@ -685,6 +700,8 @@ form.addEventListener('submit',async event=>{
     speed_limit_enabled:form.elements.speed_limit_enabled.checked,
     whitelist_enabled:form.elements.whitelist_enabled.checked,
     whitelist_entries:whitelistEntries,
+    blacklist_enabled:form.elements.blacklist_enabled.checked,
+    blacklist_entries:blacklistEntries,
     daily_limit_minutes:Number(form.elements.daily_limit_minutes.value),
     session_limit_minutes:Number(form.elements.session_limit_minutes.value),
     break_minutes:Number(form.elements.break_minutes.value),
