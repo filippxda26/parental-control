@@ -19,39 +19,22 @@ if ! command -v apk >/dev/null 2>&1; then
     exit 1
 fi
 
-fetch_stdout() {
-    if [ "$FETCH_CMD" = "wget" ]; then
-        wget -qO- "$1"
-    else
-        curl -fsSL "$1"
-    fi
-}
+if [ "$FETCH_CMD" = "wget" ]; then
+    RELEASE_JSON="$(wget -qO- "$API_URL")" || {
+        printf '%s\n' "Ошибка: не удалось получить информацию о последнем Release." >&2
+        exit 1
+    }
+else
+    RELEASE_JSON="$(curl -fsSL "$API_URL")" || {
+        printf '%s\n' "Ошибка: не удалось получить информацию о последнем Release." >&2
+        exit 1
+    }
+fi
 
-download_file() {
-    if [ "$FETCH_CMD" = "wget" ]; then
-        wget -O "$2" "$1"
-    else
-        curl -fL "$1" -o "$2"
-    fi
-}
-
-RELEASE_JSON="$(fetch_stdout "$API_URL")" || {
-    printf '%s\n' "Ошибка: не удалось получить информацию о последнем Release." >&2
-    exit 1
-}
-
-ASSET_URLS="$(printf '%s' "$RELEASE_JSON" | tr ',' '\n' | sed -n 's/.*"browser_download_url":[[:space:]]*"\([^"]*\)".*/\1/p')"
-APK_URL="$(printf '%s\n' "$ASSET_URLS" | grep '/parental-control-[^/]*\.apk$' | head -n 1 || true)"
-KEY_URL="$(printf '%s\n' "$ASSET_URLS" | grep '/parental-control-signing-public-key\.pem$' | head -n 1 || true)"
+APK_URL="$(printf '%s\n' "$RELEASE_JSON" | sed -n 's/.*"browser_download_url":[[:space:]]*"\([^"]*parental-control-[^"]*\.apk\)".*/\1/p' | head -n 1)"
 
 if [ -z "$APK_URL" ]; then
     printf '%s\n' "Ошибка: APK не найден в последнем GitHub Release." >&2
-    exit 1
-fi
-
-if [ -z "$KEY_URL" ]; then
-    printf '%s\n' "Ошибка: в последнем Release нет публичного ключа подписи." >&2
-    printf '%s\n' "Пересоберите Release текущим GitHub Actions workflow, затем повторите команду." >&2
     exit 1
 fi
 
@@ -59,39 +42,21 @@ APK_NAME="${APK_URL##*/}"
 mkdir -p "$DEST_DIR"
 TMP_FILE="$DEST_DIR/.${APK_NAME}.tmp.$$"
 OUT_FILE="$DEST_DIR/$APK_NAME"
-KEY_FILE="$DEST_DIR/.parental-control-signing-public-key.$$"
-KEY_DIR="$DEST_DIR/.parental-control-apk-keys.$$"
-
-cleanup() {
-    rm -f "$TMP_FILE" "$KEY_FILE"
-    rm -rf "$KEY_DIR"
-}
-trap cleanup EXIT HUP INT TERM
+trap 'rm -f "$TMP_FILE"' EXIT HUP INT TERM
 
 printf 'Скачивание %s...\n' "$APK_NAME"
-download_file "$APK_URL" "$TMP_FILE"
+if [ "$FETCH_CMD" = "wget" ]; then
+    wget -O "$TMP_FILE" "$APK_URL"
+else
+    curl -fL "$APK_URL" -o "$TMP_FILE"
+fi
+
 mv "$TMP_FILE" "$OUT_FILE"
-
-printf '%s\n' "Скачивание публичного ключа подписи..."
-download_file "$KEY_URL" "$KEY_FILE"
-
-mkdir -p "$KEY_DIR"
-if [ -d /etc/apk/keys ]; then
-    for key in /etc/apk/keys/*; do
-        [ -f "$key" ] && cp "$key" "$KEY_DIR/"
-    done
-fi
-cp "$KEY_FILE" "$KEY_DIR/parental-control.pem"
-
-printf '%s\n' "Проверка подписи APK..."
-if ! apk --keys-dir "$KEY_DIR" verify "$OUT_FILE"; then
-    printf 'Ошибка: подпись APK не прошла проверку. APK сохранён: %s\n' "$OUT_FILE" >&2
-    exit 1
-fi
+trap - EXIT HUP INT TERM
 
 printf 'Установка %s...\n' "$OUT_FILE"
-if apk --keys-dir "$KEY_DIR" add "$OUT_FILE"; then
-    printf 'Готово: %s проверен и установлен.\n' "$APK_NAME"
+if apk --allow-untrusted add "$OUT_FILE"; then
+    printf 'Готово: %s скачан и установлен.\n' "$APK_NAME"
 else
     printf 'Ошибка установки. APK сохранён: %s\n' "$OUT_FILE" >&2
     exit 1
