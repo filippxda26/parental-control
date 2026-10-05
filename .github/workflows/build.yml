@@ -183,13 +183,11 @@ jobs:
 
           grep -F -- '--sign-key $(BUILD_KEY_APK_SEC)' include/package-pack.mk
 
-      - name: Prepare package dependencies
+      - name: Prepare libjson-c feed only
         working-directory: sdk
         run: |
           ./scripts/feeds update base
-          ./scripts/feeds update packages
           ./scripts/feeds install -p base libjson-c
-          ./scripts/feeds install -p packages conntrack
 
       - name: Verify package sources are synchronized
         run: |
