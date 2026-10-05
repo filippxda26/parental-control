@@ -1,6 +1,6 @@
 const $=(selector,root=document)=>root.querySelector(selector);
 const devices=$('#devices'),dialog=$('#editor'),form=$('#form');
-let socket=null,socketPromise=null,socketSeq=1,reconnectTimer=null,editing=null,latest=[];
+let socket=null,socketPromise=null,socketSeq=1,reconnectTimer=null,editing=null,latest=[],restartExpectedUntil=0;
 
 function socketUrl(){
   return `${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`;
@@ -69,7 +69,7 @@ function connectSocket(){
         pending.reject(Error('WebSocket отключён'));
       }
       socketPending.clear();
-      $('#service').textContent='Служба недоступна';
+      $('#service').textContent=Date.now()<restartExpectedUntil?'Перезапуск службы…':'Служба недоступна';
       scheduleReconnect();
     };
   });
@@ -717,8 +717,13 @@ form.addEventListener('submit',async event=>{
       method:editing?'PUT':'POST',
       body
     });
+    restartExpectedUntil=Date.now()+15000;
     $('#service').textContent='Перезапуск службы…';
-    await api('/service/restart',{method:'POST'});
+    try{
+      await api('/service/restart',{method:'POST'});
+    }catch(error){
+      if(error.message!=='WebSocket отключён')throw error;
+    }
     closeEditor();
   }catch(error){
     alert(error.message);
