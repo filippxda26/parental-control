@@ -1,7 +1,13 @@
 CC ?= gcc
 CFLAGS ?= -O2 -Wall -Wextra
 all: parental-control
-parental-control: src/parental-control.c src/parental-control-web.c
+parental-control: src/parental-control.c src/parental-control-web.c src/parental-control-dns.c
 	$(CC) $(CFLAGS) -o $@ $^ -ljson-c -pthread
 clean:
 	rm -f parental-control parental-control-web
+
+test-dns:
+	$(CC) $(CFLAGS) -Werror -o test-dns tests/test-dns.c -ljson-c -pthread
+	./test-dns
+	rm -f test-dns
+.PHONY: all clean test-dns

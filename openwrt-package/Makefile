@@ -29,7 +29,7 @@ define Build/Prepare
 endef
 
 define Build/Compile
-	$(TARGET_CC) $(TARGET_CFLAGS) -Wall -Wextra -Werror $(TARGET_LDFLAGS) -o $(PKG_BUILD_DIR)/parental-control $(PKG_BUILD_DIR)/parental-control.c $(PKG_BUILD_DIR)/parental-control-web.c -ljson-c -pthread
+	$(TARGET_CC) $(TARGET_CFLAGS) -Wall -Wextra -Werror $(TARGET_LDFLAGS) -o $(PKG_BUILD_DIR)/parental-control $(PKG_BUILD_DIR)/parental-control.c $(PKG_BUILD_DIR)/parental-control-web.c $(PKG_BUILD_DIR)/parental-control-dns.c -ljson-c -pthread
 endef
 
 define Package/parental-control/install
